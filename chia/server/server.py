@@ -11,6 +11,8 @@ from typing import Any, Callable
 from typing import Counter as typing_Counter
 from typing import Dict, List, Optional, Set, Tuple, Union
 
+from urllib import request as urequest
+
 from aiohttp import ClientSession, ClientTimeout, ServerDisconnectedError, WSCloseCode, client_exceptions, web
 from aiohttp.web_app import Application
 from aiohttp.web_runner import TCPSite
@@ -420,9 +422,18 @@ class ChiaServer:
 
             url = f"wss://{target_node.host}:{target_node.port}/ws"
             self.log.debug(f"Connecting: {url}, Peer info: {target_node}")
+           
+            sys_proxies = urequest.getproxies()
+            if 'https' in sys_proxies:
+                using_proxy = sys_proxies['https']
+            elif 'http' in sys_proxies:
+                using_proxy = sys_proxies['http']
+            else
+                using_proxy = None
             try:
                 ws = await session.ws_connect(
-                    url, autoclose=True, autoping=True, heartbeat=60, ssl=ssl_context, max_msg_size=50 * 1024 * 1024
+                    url, autoclose=True, autoping=True, heartbeat=60, ssl=ssl_context, max_msg_size=50 * 1024 * 1024,
+                    proxy=using_proxy
                 )
             except ServerDisconnectedError:
                 self.log.debug(f"Server disconnected error connecting to {url}. Perhaps we are banned by the peer.")
