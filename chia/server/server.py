@@ -11,8 +11,8 @@ from typing import Any, Callable
 from typing import Counter as typing_Counter
 from typing import Dict, List, Optional, Set, Tuple, Union
 
-from urllib import request as urequest
-from ipaddress import ip_address, ip_network
+from urllib.request import getproxies, proxy_bypass
+from urllib.parse import urlparse
 
 from aiohttp import ClientSession, ClientTimeout, ServerDisconnectedError, WSCloseCode, client_exceptions, web
 from aiohttp.web_app import Application
@@ -99,6 +99,18 @@ def ssl_context_for_client(
     ssl_context.verify_mode = ssl.CERT_REQUIRED
     return ssl_context
 
+def proxy_used(url)-> str:
+    sys_proxies = getproxies()
+    host = urlparse(url).hostname
+    if proxy_bypass(host):
+        return None
+
+    if 'https' in sys_proxies:
+        return sys_proxies['https']
+    elif 'http' in sys_proxies:
+        return sys_proxies['http']
+    else:
+        return None
 
 class ChiaServer:
     def __init__(
@@ -379,24 +391,7 @@ class ChiaServer:
                 return True
         return False
 
-    def proxy_used(url)-> str:
-        sys_proxies = urequest.getproxies()
-        if 'no' in sys_proxies:
-            addr = ip_address(url)
-            masks = sys_proxies['no'].split(',')
-            for mask in masks:
-                if mask == url:
-                    return None
-                network = ip_network(mask)
-                if addr in network:
-                    return None
-        if 'https' in sys_proxies:
-            return sys_proxies['https']
-        elif 'http' in sys_proxies:
-            return sys_proxies['http']
-        else:
-            return None
-        
+       
     async def start_client(
         self,
         target_node: PeerInfo,
@@ -440,12 +435,13 @@ class ChiaServer:
                 pass
 
             url = f"wss://{target_node.host}:{target_node.port}/ws"
-            self.log.debug(f"Connecting: {url}, Peer info: {target_node}")
+            proxy = proxy_used(url)
+            self.log.debug(f"Connecting: {url} via {proxy}, Peer info: {target_node}")
            
             try:
                 ws = await session.ws_connect(
                     url, autoclose=True, autoping=True, heartbeat=60, ssl=ssl_context, max_msg_size=50 * 1024 * 1024,
-                    proxy= proxy_used(url)
+                    proxy = proxy_used(url)
                 )
             except ServerDisconnectedError:
                 self.log.debug(f"Server disconnected error connecting to {url}. Perhaps we are banned by the peer.")
